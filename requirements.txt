@@ -1,0 +1,7 @@
+streamlit
+pandas
+scikit-learn
+xgboost
+catboost
+lightgbm
+openpyxl # Required for reading Excel files
