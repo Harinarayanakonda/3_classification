@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package auth;
+
+service AuthService {
+  // ... RPCs are the same ...
+  rpc RegisterUser(RegisterUserRequest) returns (AuthResponse);
+  rpc RegisterAdmin(RegisterAdminRequest) returns (AuthResponse);
+  rpc VerifyAccountWithOTP(VerifyOTPRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc CheckUsername(CheckUsernameRequest) returns (CheckUsernameResponse);
+  rpc ForgotPassword(ForgotPasswordRequest) returns (AuthResponse);
+  rpc ResetPassword(ResetPasswordRequest) returns (AuthResponse);
+  rpc GetPendingAdmins(EmptyRequest) returns (AdminListResponse);
+  rpc ApproveAdmin(AdminApprovalRequest) returns (AuthResponse);
+  rpc SuspendUser(UserActionRequest) returns (AuthResponse);
+  rpc UnsuspendUser(UserActionRequest) returns (AuthResponse);
+}
+
+// --- Generic Messages ---
+message AuthResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message EmptyRequest {}
+
+// --- Registration Messages ---
+message RegisterUserRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  optional string phone_number = 4;
+}
+
+message RegisterAdminRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  string full_name = 4;
+  optional string employee_id = 5;
+  string admin_request_reason = 6;
+}
+
+// --- Verification & Login Messages ---
+message VerifyOTPRequest {
+  string email = 1;
+  string otp_code = 2;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  bool success = 1;
+  string message = 2;
+  string token = 3;
+  string user_id = 4;
+  string role = 5;
+}
+
+// --- Account Management Messages ---
+message CheckUsernameRequest {
+  string username = 1;
+}
+
+message CheckUsernameResponse {
+  bool is_available = 1;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+// IMPROVED MESSAGE
+message ResetPasswordRequest {
+  string token = 1;
+  string email = 2;         // Added for efficiency
+  string new_password = 3;
+}
+
+// --- Admin Management Messages ---
+message AdminUser {
+  string user_id = 1;
+  string username = 2;
+  string email = 3;
+  string full_name = 4;
+  string admin_request_reason = 5;
+  string created_at = 6;
+}
+
+message AdminListResponse {
+  repeated AdminUser admins = 1;
+}
+
+message AdminApprovalRequest {
+  string user_id = 1;
+}
+
+// IMPROVED MESSAGE
+message UserActionRequest {
+    string user_id = 1;
+    optional string reason = 2; // Explicitly optional
+}

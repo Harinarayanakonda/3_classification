@@ -1,137 +1,142 @@
+# pages/1_🔮_Inference.py
+# pages/1_🔮_Inference.py
+
+import streamlit as st
+
+# --- AUTHENTICATION CHECK ---
+if not st.session_state.get("authenticated", False):
+    st.error("Please log in first to access this page.")
+    st.stop()
+# --------------------------------
+
+# Your existing page code goes below
+st.title("🔮 Model Inference")
+# ... (rest of your code for this page) ...
 import streamlit as st
 import pandas as pd
 import os
-from utils.model_handler import load_model_and_config
-from sklearn.neighbors import KNeighborsClassifier
 
-st.set_page_config(page_title="Inference", layout="wide")
+st.set_page_config(page_title="Inference", layout="wide", page_icon="🔮")
 
-def get_saved_models():
-    """Scans the trained_models directory for saved model files."""
-    models_dir = "trained_models"
-    if not os.path.exists(models_dir):
-        return []
-    return [f for f in os.listdir(models_dir) if f.endswith(('.joblib', '.pkl'))]
+# --- Page Title ---
+st.title("🔮 Model Inference")
 
-def main():
-    """Main function for the Inference page."""
-    st.title("🔮 Inference")
-    st.header("Step 1: Load a Trained Model")
+# --- CHECK IF A MODEL IS LOADED ---
+if 'artifacts' not in st.session_state or st.session_state['artifacts'] is None:
+    st.warning("No model has been loaded by an admin yet.")
+    st.info("Please navigate to the **🔑 Admin Dashboard** to load a model.", icon="ℹ️")
+    st.stop()
 
-    saved_models = get_saved_models()
-    if not saved_models:
-        st.warning("No trained models found. Please train and save a model on the '⚙️ Model Selection & Training' page first.")
-        return
+st.markdown("Select a prediction method and provide input data to get a prediction.")
+st.success(f"**Model Ready:** Predictions are being made with the `{st.session_state['artifacts']['pipeline'].steps[-1][1].__class__.__name__}` model.", icon="✅")
+st.markdown("---")
 
-    selected_model_file = st.selectbox("Select a trained model", options=saved_models)
 
-    if selected_model_file:
-        try:
-            model, config = load_model_and_config(selected_model_file)
-            st.session_state['inference_model'] = model
-            st.session_state['inference_config'] = config
-            st.success(f"Successfully loaded model `{config['model_name']}`.")
-            st.json(config)
-        except Exception as e:
-            st.error(f"Error loading model: {e}")
-            return
+# --- Extract artifacts from session state ---
+artifacts = st.session_state['artifacts']
+pipeline = artifacts['pipeline']
+target_encoder = artifacts['target_encoder']
+class_labels = artifacts['class_labels']
+preprocessor = pipeline.named_steps['preprocessor']
+feature_names_in = preprocessor.feature_names_in_
 
-    if 'inference_model' in st.session_state:
-        st.header("Step 2: Provide Data for Prediction")
+# --- Prediction Method Selection ---
+st.header("Step 1: Choose Prediction Method")
+inference_method = st.radio(
+    "How would you like to provide data for prediction?",
+    ("Manual Input (Single Prediction)", "Batch Upload (File)"),
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+# --- MANUAL INPUT ---
+if inference_method == "Manual Input (Single Prediction)":
+    st.header("Step 2: Provide Input Data Manually")
+    input_data = {}
+    cols = st.columns(2)
+    
+    # Try to get original data types from session state for better UI
+    if 'processed_df' in st.session_state:
+        original_dtypes = {name: str(dtype) for name, dtype in st.session_state['processed_df'][feature_names_in].dtypes.items()}
+    else:
+        original_dtypes = {}
+
+    for i, feature in enumerate(feature_names_in):
+        col = cols[i % 2]
+        dtype_str = original_dtypes.get(feature, '')
         
-        inference_method = st.radio(
-            "Choose prediction method",
-            ("Manual Input (Single Prediction)", "Batch Upload (CSV)"),
-            horizontal=True
-        )
+        if 'int' in dtype_str or 'float' in dtype_str:
+            input_data[feature] = col.number_input(f"Enter {feature}", value=0.0, format="%.4f")
+        else:
+            # Fallback to text input if original categories aren't available
+            input_data[feature] = col.text_input(f"Enter value for '{feature}'")
 
-        model = st.session_state['inference_model']
-        config = st.session_state['inference_config']
-        features = config['inference_features']
+    if st.button("📈 Predict", key="predict_button"):
+        try:
+            input_df = pd.DataFrame([input_data])[feature_names_in]
+            with st.spinner("Making prediction..."):
+                pred_encoded = pipeline.predict(input_df)
+                pred_proba = pipeline.predict_proba(input_df)
+                pred_label = target_encoder.inverse_transform(pred_encoded)[0]
 
-        if inference_method == "Manual Input (Single Prediction)":
-            with st.form(key='manual_input_form'):
-                st.markdown("Enter the values for the features below:")
-                input_data = {}
-                for feature in features:
-                    # Simple check for numeric vs categorical, can be improved
-                    input_data[feature] = st.number_input(f"Enter value for '{feature}'", value=0.0, format="%.4f")
+                st.subheader("Prediction Result")
+                st.success(f"**Predicted Class:** `{pred_label}`")
                 
-                predict_button = st.form_submit_button("Predict")
+                st.subheader("Prediction Probabilities")
+                proba_df = pd.DataFrame(pred_proba, columns=class_labels).T.rename(columns={0: 'Probability'})
+                proba_df['Probability'] = proba_df['Probability'].apply(lambda x: f"{x:.2%}")
+                st.dataframe(proba_df)
 
-                if predict_button:
-                    try:
-                        input_df = pd.DataFrame([input_data])
-                        # Ensure column order matches training
-                        input_df = input_df[features]
+        except Exception as e:
+            st.error(f"An error occurred during prediction: {e}")
 
-                        if config['model_name'] == "K-Nearest Neighbors (KNN)":
-                             # KNN needs the training data for prediction
-                            if 'processed_df' in st.session_state:
-                                train_df = st.session_state['processed_df']
-                                X_train = train_df[features]
-                                y_train = train_df[config['target_column']]
-                                knn = KNeighborsClassifier(**config['params'])
-                                knn.fit(X_train, y_train)
-                                prediction = knn.predict(input_df)
-                                proba = knn.predict_proba(input_df)
-                            else:
-                                st.error("Training data not found in session for KNN. Please re-upload on page 1.")
-                                return
-                        else:
-                            prediction = model.predict(input_df)
-                            proba = model.predict_proba(input_df) if hasattr(model, 'predict_proba') else None
+# --- BATCH UPLOAD ---
+elif inference_method == "Batch Upload (File)":
+    st.header("Step 2: Upload a File for Batch Prediction")
+    
+    batch_file = st.file_uploader(
+        "Upload a CSV, Excel, JSON, or Parquet file.", 
+        type=['csv', 'xlsx', 'xls', 'json', 'parquet']
+    )
 
-                        st.subheader("Prediction Result")
-                        st.success(f"**Predicted Class:** `{prediction[0]}`")
-                        if proba is not None:
-                            st.write("**Prediction Probabilities:**")
-                            st.dataframe(pd.DataFrame(proba, columns=[f"Prob_Class_{i}" for i in range(proba.shape[1])]))
+    if batch_file:
+        try:
+            file_extension = os.path.splitext(batch_file.name)[1].lower()
+            
+            if file_extension == '.csv':
+                batch_df = pd.read_csv(batch_file)
+            elif file_extension in ['.xlsx', '.xls']:
+                batch_df = pd.read_excel(batch_file)
+            elif file_extension == '.json':
+                batch_df = pd.read_json(batch_file)
+            elif file_extension == '.parquet':
+                batch_df = pd.read_parquet(batch_file)
+            else:
+                st.error(f"Unsupported file format: {file_extension}")
+                st.stop()
 
-                    except Exception as e:
-                        st.error(f"An error occurred during prediction: {e}")
+            if not all(f in batch_df.columns for f in feature_names_in):
+                st.error(f"Uploaded file is missing required columns. Required: {list(feature_names_in)}")
+            else:
+                input_df = batch_df[feature_names_in]
+                with st.spinner("Making predictions for the batch..."):
+                    predictions_encoded = pipeline.predict(input_df)
+                    predictions = target_encoder.inverse_transform(predictions_encoded)
+                
+                result_df = batch_df.copy()
+                result_df['prediction'] = predictions
+                
+                st.subheader("Batch Prediction Results")
+                st.dataframe(result_df)
+                
+                output_filename = f"predictions_{os.path.splitext(batch_file.name)[0]}.csv"
+                csv = result_df.to_csv(index=False).encode('utf-8')
 
-        elif inference_method == "Batch Upload (CSV)":
-            batch_file = st.file_uploader("Upload a CSV file for batch prediction", type=['csv'])
-            if batch_file:
-                try:
-                    batch_df = pd.read_csv(batch_file)
-                    # Validate columns
-                    if not all(f in batch_df.columns for f in features):
-                        st.error(f"Uploaded file is missing required columns. Required: {features}")
-                    else:
-                        batch_input_df = batch_df[features]
-                        
-                        if config['model_name'] == "K-Nearest Neighbors (KNN)":
-                            if 'processed_df' in st.session_state:
-                                train_df = st.session_state['processed_df']
-                                X_train = train_df[features]
-                                y_train = train_df[config['target_column']]
-                                knn = KNeighborsClassifier(**config['params'])
-                                knn.fit(X_train, y_train)
-                                predictions = knn.predict(batch_input_df)
-                            else:
-                                st.error("Training data not found in session for KNN. Please re-upload on page 1.")
-                                return
-                        else:
-                            predictions = model.predict(batch_input_df)
-                        
-                        result_df = batch_df.copy()
-                        result_df['prediction'] = predictions
-                        
-                        st.subheader("Batch Prediction Results")
-                        st.dataframe(result_df)
-                        
-                        csv = result_df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="Download Results as CSV",
-                            data=csv,
-                            file_name='batch_predictions.csv',
-                            mime='text/csv',
-                        )
-
-                except Exception as e:
-                    st.error(f"An error occurred during batch prediction: {e}")
-
-if __name__ == "__main__":
-    main()
+                st.download_button(
+                    label="Download Results as CSV",
+                    data=csv,
+                    file_name=output_filename,
+                    mime='text/csv',
+                )
+        except Exception as e:
+            st.error(f"An error occurred during batch prediction: {e}")

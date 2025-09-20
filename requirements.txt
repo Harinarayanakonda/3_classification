@@ -5,3 +5,5 @@ xgboost
 catboost
 lightgbm
 openpyxl # Required for reading Excel files
+seaborn
+psutil

@@ -1,3 +1,21 @@
+# Example for: pages/1_💾_Dataset_Upload.py
+
+import streamlit as st
+
+# --- AUTHENTICATION & AUTHORIZATION CHECK ---
+if not st.session_state.get("authenticated", False):
+    st.error("Please log in first to access this page.")
+    st.stop()
+
+if st.session_state.get("role") != "admin":
+    st.error("🚫 You do not have permission to view this page.")
+    st.info("This page is for administrators only.")
+    st.stop()
+# ---------------------------------------------
+
+# Your existing page code goes below
+st.title("💾 Dataset Upload & Preprocessing")
+# ... (rest of your code for this page) ...
 import streamlit as st
 import pandas as pd
 from utils.data_handler import load_dataset
