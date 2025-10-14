@@ -26,7 +26,8 @@ if _version_not_supported:
 
 
 class AuthServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
+    """Service
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -89,14 +90,19 @@ class AuthServiceStub(object):
                 request_serializer=auth__pb2.UserActionRequest.SerializeToString,
                 response_deserializer=auth__pb2.AuthResponse.FromString,
                 _registered_method=True)
+        self.LoginWithOAuth = channel.unary_unary(
+                '/auth.AuthService/LoginWithOAuth',
+                request_serializer=auth__pb2.LoginWithOAuthRequest.SerializeToString,
+                response_deserializer=auth__pb2.LoginResponse.FromString,
+                _registered_method=True)
 
 
 class AuthServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
+    """Service
+    """
 
     def RegisterUser(self, request, context):
-        """... RPCs are the same ...
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -161,6 +167,13 @@ class AuthServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def LoginWithOAuth(self, request, context):
+        """OAuth login endpoint
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AuthServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -219,6 +232,11 @@ def add_AuthServiceServicer_to_server(servicer, server):
                     request_deserializer=auth__pb2.UserActionRequest.FromString,
                     response_serializer=auth__pb2.AuthResponse.SerializeToString,
             ),
+            'LoginWithOAuth': grpc.unary_unary_rpc_method_handler(
+                    servicer.LoginWithOAuth,
+                    request_deserializer=auth__pb2.LoginWithOAuthRequest.FromString,
+                    response_serializer=auth__pb2.LoginResponse.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'auth.AuthService', rpc_method_handlers)
@@ -228,7 +246,8 @@ def add_AuthServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class AuthService(object):
-    """Missing associated documentation comment in .proto file."""
+    """Service
+    """
 
     @staticmethod
     def RegisterUser(request,
@@ -517,6 +536,33 @@ class AuthService(object):
             '/auth.AuthService/UnsuspendUser',
             auth__pb2.UserActionRequest.SerializeToString,
             auth__pb2.AuthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LoginWithOAuth(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/auth.AuthService/LoginWithOAuth',
+            auth__pb2.LoginWithOAuthRequest.SerializeToString,
+            auth__pb2.LoginResponse.FromString,
             options,
             channel_credentials,
             insecure,

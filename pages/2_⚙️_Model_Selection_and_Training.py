@@ -1,3 +1,5 @@
+# pages/2_⚙️_Model_Selection&_Training.py
+
 import streamlit as st
 import pandas as pd
 import seaborn as sns
@@ -6,27 +8,27 @@ import plotly.express as px
 import numpy as np
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
-# --- AUTHENTICATION & AUTHORIZATION CHECK ---
-# This block ensures that only logged-in administrators can access this page.
-if not st.session_state.get("authenticated", False):
-    st.error("Please log in first to access this page.")
-    st.stop()
-
-if st.session_state.get("role") != "admin":
-    st.error("🚫 You do not have permission to view this page.")
-    st.info("This page is for administrators only.")
-    st.stop()
-# ---------------------------------------------
-
 # --- UTILITY IMPORTS ---
-# Make sure these files exist in your utils/ directory
-try:
-    from utils.ui_components import render_model_params, get_model_params
-    from utils.model_handler import train_and_evaluate_model, save_model_artifacts
-except ImportError as e:
-    st.error(f"Failed to import utility functions: {e}. Make sure your 'utils' folder is correctly set up.")
+from utils.ui_components import render_navbar, render_model_params, get_model_params
+from utils.model_handler import train_and_evaluate_model, save_model_artifacts
+from auth_service import auth_pb2
+
+# --- SECURITY & NAVIGATION ---
+# 1. Check if user is authenticated
+if not st.session_state.get("authenticated", False):
+    st.error("🚫 You must log in first!")
     st.stop()
 
+# 2. Check if user is an ADMIN
+role_enum = st.session_state.get("role")
+role_name = auth_pb2.UserRole.Name(role_enum) if role_enum is not None else ""
+if role_name != 'ADMIN':
+    st.error("🚫 You do not have permission to view this page.")
+    st.stop()
+
+# 3. Render the navigation bar
+render_navbar()
+# --------------------------------
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Model Training", layout="wide")
@@ -111,7 +113,7 @@ def main():
 
     # --- Step 3: Training ---
     st.header("Step 3: Train the Model")
-    if st.button("🚀 Train Model", key="train_button"):
+    if st.button("🚀 Train Model", key="train_button", use_container_width=True):
         
         should_tune = (model_config.get('mode') == 'Automatic')
         spinner_text = "Searching for the best hyperparameters..." if should_tune else "Training model..."
@@ -210,7 +212,7 @@ def main():
             filename = st.text_input("Enter a filename", value=f"{model_name}_model")
             save_format = st.radio("Select format", options=['joblib', 'pickle'], horizontal=True)
             
-            if st.form_submit_button("💾 Save Model Artifacts"):
+            if st.form_submit_button("💾 Save Model Artifacts", use_container_width=True):
                 try:
                     save_path = save_model_artifacts(
                         artifacts=st.session_state['artifacts'],

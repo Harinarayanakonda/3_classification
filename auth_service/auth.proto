@@ -2,8 +2,30 @@ syntax = "proto3";
 
 package auth;
 
+// Enum for user roles aligned with DB enum user_role
+enum UserRole {
+  USER = 0;
+  ADMIN = 1;
+}
+
+// Enum for user status aligned with DB enum user_status
+enum UserStatus {
+  PENDING_VERIFICATION = 0;
+  PENDING_APPROVAL = 1;
+  ACTIVE = 2;
+  SUSPENDED = 3;
+}
+
+// Supported OAuth providers
+enum OAuthProvider {
+  OAUTH_PROVIDER_UNSPECIFIED = 0;
+  GOOGLE = 1;
+  GITHUB = 2;
+  MICROSOFT = 3;
+}
+
+// Service
 service AuthService {
-  // ... RPCs are the same ...
   rpc RegisterUser(RegisterUserRequest) returns (AuthResponse);
   rpc RegisterAdmin(RegisterAdminRequest) returns (AuthResponse);
   rpc VerifyAccountWithOTP(VerifyOTPRequest) returns (AuthResponse);
@@ -15,14 +37,18 @@ service AuthService {
   rpc ApproveAdmin(AdminApprovalRequest) returns (AuthResponse);
   rpc SuspendUser(UserActionRequest) returns (AuthResponse);
   rpc UnsuspendUser(UserActionRequest) returns (AuthResponse);
+
+  // OAuth login endpoint
+  rpc LoginWithOAuth(LoginWithOAuthRequest) returns (LoginResponse);
 }
 
-// --- Generic Messages ---
+// Generic response used for many RPCs
 message AuthResponse {
   bool success = 1;
   string message = 2;
 }
 
+// Empty request for calls needing no parameters
 message EmptyRequest {}
 
 // --- Registration Messages ---
@@ -30,7 +56,7 @@ message RegisterUserRequest {
   string username = 1;
   string email = 2;
   string password = 3;
-  optional string phone_number = 4;
+  string phone_number = 4; // empty string if omitted
 }
 
 message RegisterAdminRequest {
@@ -38,7 +64,7 @@ message RegisterAdminRequest {
   string email = 2;
   string password = 3;
   string full_name = 4;
-  optional string employee_id = 5;
+  string employee_id = 5; // empty string if omitted
   string admin_request_reason = 6;
 }
 
@@ -58,7 +84,19 @@ message LoginResponse {
   string message = 2;
   string token = 3;
   string user_id = 4;
-  string role = 5;
+  UserRole role = 5;
+  string username = 6; // MODIFIED: Added username
+  string email = 7;    // MODIFIED: Added email
+}
+
+// OAuth login request (ID token or access token from provider)
+message LoginWithOAuthRequest {
+  OAuthProvider provider = 1;
+  string id_token = 2;
+  string access_token = 3;
+  string email_fallback = 4;
+  string avatar_url = 5;
+  string full_name = 6;
 }
 
 // --- Account Management Messages ---
@@ -74,10 +112,9 @@ message ForgotPasswordRequest {
   string email = 1;
 }
 
-// IMPROVED MESSAGE
 message ResetPasswordRequest {
   string token = 1;
-  string email = 2;         // Added for efficiency
+  string email = 2;
   string new_password = 3;
 }
 
@@ -88,19 +125,23 @@ message AdminUser {
   string email = 3;
   string full_name = 4;
   string admin_request_reason = 5;
-  string created_at = 6;
+  string created_at = 6; // RFC3339 timestamp string
 }
 
 message AdminListResponse {
   repeated AdminUser admins = 1;
 }
 
+// auth_service/auth.proto
+
 message AdminApprovalRequest {
   string user_id = 1;
+  int32 expiry_days = 2; // ADD THIS LINE: 0 or negative means no expiry
 }
 
-// IMPROVED MESSAGE
 message UserActionRequest {
-    string user_id = 1;
-    optional string reason = 2; // Explicitly optional
+  string user_id = 1;
+  string reason = 2; // optional, empty string if omitted
 }
+// auth_service/auth.proto
+

@@ -1,38 +1,37 @@
-# pages/1_🔮_Inference.py
-# pages/1_🔮_Inference.py
+# pages/3_🔮_Inference.py
 
-import streamlit as st
-
-# --- AUTHENTICATION CHECK ---
-if not st.session_state.get("authenticated", False):
-    st.error("Please log in first to access this page.")
-    st.stop()
-# --------------------------------
-
-# Your existing page code goes below
-st.title("🔮 Model Inference")
-# ... (rest of your code for this page) ...
 import streamlit as st
 import pandas as pd
 import os
 
-st.set_page_config(page_title="Inference", layout="wide", page_icon="🔮")
+from utils.ui_components import render_navbar
+from auth_service import auth_pb2
 
-# --- Page Title ---
+# --- SECURITY & NAVIGATION ---
+# 1. Check if user is authenticated (accessible to both roles)
+if not st.session_state.get("authenticated", False):
+    st.error("🚫 You must log in first!")
+    st.stop()
+
+# 2. Render the navigation bar (it will adapt based on the user's role)
+render_navbar()
+# ---------------------------------
+
+# --- YOUR ORIGINAL PAGE CODE STARTS HERE ---
+st.set_page_config(page_title="Inference", layout="wide", page_icon="🔮")
 st.title("🔮 Model Inference")
 
-# --- CHECK IF A MODEL IS LOADED ---
-if 'artifacts' not in st.session_state or st.session_state['artifacts'] is None:
-    st.warning("No model has been loaded by an admin yet.")
-    st.info("Please navigate to the **🔑 Admin Dashboard** to load a model.", icon="ℹ️")
+if 'artifacts' not in st.session_state or st.session_state.get('artifacts') is None:
+    st.warning("⚠️ No model has been loaded by an admin yet.")
+    st.info("An administrator must first load a model from the 'Dashboard' before inference can be performed.", icon="ℹ️")
     st.stop()
 
 st.markdown("Select a prediction method and provide input data to get a prediction.")
-st.success(f"**Model Ready:** Predictions are being made with the `{st.session_state['artifacts']['pipeline'].steps[-1][1].__class__.__name__}` model.", icon="✅")
+
+active_model_name = st.session_state['artifacts']['pipeline'].steps[-1][1].__class__.__name__
+st.success(f"**Model Ready:** Predictions are being made with the `{active_model_name}` model.", icon="✅")
 st.markdown("---")
 
-
-# --- Extract artifacts from session state ---
 artifacts = st.session_state['artifacts']
 pipeline = artifacts['pipeline']
 target_encoder = artifacts['target_encoder']
@@ -40,7 +39,6 @@ class_labels = artifacts['class_labels']
 preprocessor = pipeline.named_steps['preprocessor']
 feature_names_in = preprocessor.feature_names_in_
 
-# --- Prediction Method Selection ---
 st.header("Step 1: Choose Prediction Method")
 inference_method = st.radio(
     "How would you like to provide data for prediction?",
@@ -49,29 +47,30 @@ inference_method = st.radio(
     label_visibility="collapsed"
 )
 
-# --- MANUAL INPUT ---
 if inference_method == "Manual Input (Single Prediction)":
     st.header("Step 2: Provide Input Data Manually")
-    input_data = {}
-    cols = st.columns(2)
     
-    # Try to get original data types from session state for better UI
-    if 'processed_df' in st.session_state:
-        original_dtypes = {name: str(dtype) for name, dtype in st.session_state['processed_df'][feature_names_in].dtypes.items()}
-    else:
-        original_dtypes = {}
-
-    for i, feature in enumerate(feature_names_in):
-        col = cols[i % 2]
-        dtype_str = original_dtypes.get(feature, '')
+    with st.form("manual_input_form"):
+        input_data = {}
+        cols = st.columns(3)
         
-        if 'int' in dtype_str or 'float' in dtype_str:
-            input_data[feature] = col.number_input(f"Enter {feature}", value=0.0, format="%.4f")
+        if 'processed_df' in st.session_state:
+            original_dtypes = {name: str(dtype) for name, dtype in st.session_state['processed_df'][feature_names_in].dtypes.items()}
         else:
-            # Fallback to text input if original categories aren't available
-            input_data[feature] = col.text_input(f"Enter value for '{feature}'")
+            original_dtypes = {}
 
-    if st.button("📈 Predict", key="predict_button"):
+        for i, feature in enumerate(feature_names_in):
+            col = cols[i % 3]
+            dtype_str = original_dtypes.get(feature, '')
+            
+            if 'int' in dtype_str or 'float' in dtype_str:
+                input_data[feature] = col.number_input(f"Enter {feature}", value=0.0, format="%.4f")
+            else:
+                input_data[feature] = col.text_input(f"Enter value for '{feature}'")
+
+        submitted = st.form_submit_button("📈 Predict", use_container_width=True)
+
+    if submitted:
         try:
             input_df = pd.DataFrame([input_data])[feature_names_in]
             with st.spinner("Making prediction..."):
@@ -86,11 +85,9 @@ if inference_method == "Manual Input (Single Prediction)":
                 proba_df = pd.DataFrame(pred_proba, columns=class_labels).T.rename(columns={0: 'Probability'})
                 proba_df['Probability'] = proba_df['Probability'].apply(lambda x: f"{x:.2%}")
                 st.dataframe(proba_df)
-
         except Exception as e:
             st.error(f"An error occurred during prediction: {e}")
 
-# --- BATCH UPLOAD ---
 elif inference_method == "Batch Upload (File)":
     st.header("Step 2: Upload a File for Batch Prediction")
     
@@ -102,7 +99,6 @@ elif inference_method == "Batch Upload (File)":
     if batch_file:
         try:
             file_extension = os.path.splitext(batch_file.name)[1].lower()
-            
             if file_extension == '.csv':
                 batch_df = pd.read_csv(batch_file)
             elif file_extension in ['.xlsx', '.xls']:
@@ -111,10 +107,7 @@ elif inference_method == "Batch Upload (File)":
                 batch_df = pd.read_json(batch_file)
             elif file_extension == '.parquet':
                 batch_df = pd.read_parquet(batch_file)
-            else:
-                st.error(f"Unsupported file format: {file_extension}")
-                st.stop()
-
+            
             if not all(f in batch_df.columns for f in feature_names_in):
                 st.error(f"Uploaded file is missing required columns. Required: {list(feature_names_in)}")
             else:
@@ -137,6 +130,7 @@ elif inference_method == "Batch Upload (File)":
                     data=csv,
                     file_name=output_filename,
                     mime='text/csv',
+                    use_container_width=True
                 )
         except Exception as e:
             st.error(f"An error occurred during batch prediction: {e}")

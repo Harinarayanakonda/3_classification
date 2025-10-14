@@ -7,3 +7,5 @@ lightgbm
 openpyxl # Required for reading Excel files
 seaborn
 psutil
+streamlit-oauth
+redis

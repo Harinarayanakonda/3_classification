@@ -1,74 +1,56 @@
 # utils/ui_components.py
 
 import streamlit as st
-import os
+from auth_service import auth_pb2
 
 def render_navbar():
     """
-    Renders a custom top navigation bar that adapts to the user's role.
-    Automatically detects pages in the 'pages/' folder to prevent page not found errors.
+    Renders a custom sidebar with user info, role-based navigation, and a logout button.
+    This should be called on every authenticated page.
     """
-    # Hide default Streamlit sidebar and apply custom CSS for the navbar
-    st.markdown("""
-        <style>
-            [data-testid="stSidebarNav"] { display: none; }
-            .navbar {
-                display: flex;
-                flex-direction: row;
-                justify-content: space-between;
-                align-items: center;
-                padding: 0.75rem 0;
-                border-bottom: 1px solid #333;
-            }
-            .nav-links {
-                display: flex;
-                gap: 1.5rem; /* Spacing between nav links */
-            }
-        </style>
-    """, unsafe_allow_html=True)
+    # Don't render if the user is not authenticated
+    if 'authenticated' not in st.session_state or not st.session_state.get("authenticated"):
+        return
 
-    role = st.session_state.get("role")
-    
-    # Use a container for navbar
-    with st.container():
-        col1, col2 = st.columns([8, 1])
-        
-        with col1:
-            st.markdown('<div class="nav-links">', unsafe_allow_html=True)
-            
-            # Only admins get full page links
-            if role == "admin":
-                pages_dir = os.path.join(os.getcwd(), "pages")
-                if os.path.exists(pages_dir):
-                    for page_file in sorted(os.listdir(pages_dir)):
-                        if page_file.endswith(".py"):
-                            page_name = page_file.replace(".py", "")
-                            # Replace unsafe characters for label
-                            safe_label = page_name.replace("_", " ").replace("&", "and")
-                            st.page_link(
-                                f"pages/{page_file}",
-                                label=f"**{safe_label}**",
-                                icon="📄"  # generic icon
-                            )
-            elif role == "user":
-                st.markdown("#### 🔮 Model Inference")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+    # --- NEW: HIDE THE DEFAULT STREAMLIT NAVIGATION ---
+    st.markdown("<style>[data-testid='stSidebarNav'] {display: none;}</style>", unsafe_allow_html=True)
+    # --------------------------------------------------
 
-        with col2:
-            if st.button("Logout", key="logout_button_top"):
-                st.session_state['authenticated'] = False
-                st.session_state['role'] = None
-                # Make sure this matches your login file
-                st.switch_page("app.py")
-    
-    st.markdown("---")  # Visual separator
+    role_enum = st.session_state.get("role")
+    role_name = auth_pb2.UserRole.Name(role_enum) if role_enum is not None else "Unknown"
+
+    # --- Use st.sidebar to create the navigation panel on the left ---
+    with st.sidebar:
+        # --- User Information ---
+        st.title(f"Welcome, {st.session_state.get('username', 'User')}!")
+        st.caption(f"**Role:** {role_name.capitalize()}")
+        st.write(st.session_state.get('email', ''))
+        st.markdown("---")
+
+        # --- Role-Based Navigation Links ---
+        st.header("Navigation")
+
+        if role_name == "ADMIN":
+            st.page_link("pages/2_🔑_Admin_Dashboard.py", label="Admin Dashboard", icon="🔑")
+            st.page_link("pages/1_💾_Dataset_Upload_and_Preprocessing.py", label="Dataset & Preprocessing", icon="💾")
+            st.page_link("pages/2_⚙️_Model_Selection_and_Training.py", label="Model Training", icon="⚙️")
+            st.page_link("pages/3_🔮_Inference.py", label="Inference", icon="🔮")
+
+        elif role_name == "USER":
+            st.page_link("pages/3_🔮_Inference.py", label="Inference", icon="🔮")
+
+        # --- Logout Button at the bottom of the sidebar ---
+        st.markdown("---")
+        if st.button("Logout", key="logout_button_sidebar", use_container_width=True):
+            for key in ['authenticated', 'role', 'user_id', 'token', 'username', 'email']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.switch_page("login.py")
 
 
 def render_model_params(model_name: str, data_shape=None) -> dict:
     """
     Renders UI elements for model hyperparameters.
-    Includes 'Automatic' mode and detailed parameter explanations.
     """
     config = {}
     params = {}
@@ -134,8 +116,6 @@ def render_model_params(model_name: str, data_shape=None) -> dict:
             params['subsample'] = c2.slider("subsample", 0.5, 1.0, 1.0)
             params['min_samples_split'] = c1.slider("min_samples_split", 2, 20, 2)
             params['min_samples_leaf'] = c2.slider("min_samples_leaf", 1, 20, 1)
-
-        # Add more models as needed: XGBoost, CatBoost, LightGBM, SVM, etc.
 
         if model_name not in ["K-Nearest Neighbors (KNN)"]:
             params['random_state'] = st.number_input("Random State (seed)", value=42)
